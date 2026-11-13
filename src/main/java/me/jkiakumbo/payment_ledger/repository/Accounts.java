@@ -1,6 +1,11 @@
 package me.jkiakumbo.payment_ledger.repository;
 
+import jakarta.persistence.LockModeType;
 import me.jkiakumbo.payment_ledger.domain.Account;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.HashMap;
@@ -8,30 +13,9 @@ import java.util.Map;
 import java.util.Optional;
 
 @Repository
-public class Accounts {
-    private final Map<Long, Account> accounts;
+public interface Accounts extends JpaRepository<Account, Long> {
 
-    public Accounts() {
-        this.accounts = new HashMap<>();
-    }
-
-    public Optional<Account> getById(long id) {
-        Account account = accounts.get(id);
-
-        if (account != null) {
-            return Optional.of(account);
-        }
-
-        return Optional.empty();
-    }
-
-    public Account create(Account account) {
-        return accounts.put(account.getId(), account);
-    }
-
-    public void update(Account account) {
-        accounts.replace(account.getId(), account);
-    }
-
-
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Account a WHERE a.id = :id")
+    Optional<Account> findByIdForUpdate(@Param("id") Long id);
 }

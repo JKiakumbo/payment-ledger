@@ -1,269 +1,1 @@
-package me.jkiakumbo.payment_ledger.service;
-
-import me.jkiakumbo.payment_ledger.exceptions.*;
-import me.jkiakumbo.payment_ledger.command.TransferCommand;
-import me.jkiakumbo.payment_ledger.domain.Account;
-import me.jkiakumbo.payment_ledger.domain.Currency;
-import me.jkiakumbo.payment_ledger.repository.Accounts;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-@SpringBootTest
-class TransferServiceImplTest {
-
-    private Accounts accounts;
-    private  TransferService transferService;
-
-
-    @BeforeEach
-    public void setup() {
-        accounts = new Accounts();
-        transferService = new TransferServiceImpl(accounts);
-    }
-
-    @Test
-    public void shouldTransferMoney() {
-
-        // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(10000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountA);
-
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(5000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountB);
-
-        TransferCommand command = new TransferCommand(1, 2, 3000);
-
-        // WHEN
-        transferService.transfer(command);
-        Account resultA = accounts.getById(1).orElseThrow();
-        Account resultB = accounts.getById(2).orElseThrow();
-
-        // THEN
-        assertEquals(7000, resultA.getBalance());
-        assertEquals(8000, resultB.getBalance());
-
-    }
-
-    @Test
-    public void shouldRejectTransferWhenInsufficientFunds() {
-
-        // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(10000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountA);
-
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(5000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountB);
-
-        TransferCommand command = new TransferCommand(1, 2, 15000);
-
-        // WHEN
-        assertThrowsExactly(InsufficientAmountException.class, () -> transferService.transfer(command));
-        Account resultA = accounts.getById(1).orElseThrow();
-        Account resultB = accounts.getById(2).orElseThrow();
-
-        // THEN
-        assertEquals(10000, resultA.getBalance());
-        assertEquals(5000, resultB.getBalance());
-
-    }
-
-    @Test
-    public void shouldNotAcceptZeroAmount() {
-        // WHEN
-        long amount = 0;
-        TransferCommand command = new TransferCommand(1, 2, amount);
-
-        // THEN
-        assertThrowsExactly(InvalidAmountException.class, () -> transferService.transfer(command));
-    }
-
-    @Test
-    public void shouldNotAcceptNegativeAmount() {
-        // WHEN
-        long amount = -50;
-        TransferCommand command = new TransferCommand(1, 2, amount);
-
-        // THEN
-        assertThrowsExactly(InvalidAmountException.class, () -> transferService.transfer(command));
-    }
-
-    @Test
-    public void shouldRejectTransferForNoExistingSource() {
-
-        // GIVEN
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(5000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountB);
-
-        TransferCommand command = new TransferCommand(1, 2, 15000);
-
-        // WHEN
-        assertThrowsExactly(SourceAccountNotFoundException.class, () -> transferService.transfer(command));
-        Account resultB = accounts.getById(2).orElseThrow();
-
-        // THEN
-        assertEquals(5000, resultB.getBalance());
-
-    }
-
-    @Test
-    public void shouldRejectTransferForNoExistingDestination() {
-
-        // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(5000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountA);
-
-        TransferCommand command = new TransferCommand(1, 2, 15000);
-
-        // WHEN
-        assertThrowsExactly(DestinationAccountNotFoundException.class, () -> transferService.transfer(command));
-        Account resultA = accounts.getById(1).orElseThrow();
-
-        // THEN
-        assertEquals(5000, resultA.getBalance());
-
-    }
-
-    @Test
-    public void shouldRejectTransferToSameAccount() {
-        // WHEN
-        long amount = 50;
-        TransferCommand command = new TransferCommand(1, 1, amount);
-
-        // THEN
-        assertThrowsExactly(TransferToSameAccountException.class, () -> transferService.transfer(command));
-    }
-
-
-    @Test
-    public void shouldPreserveBalancesWhenDestinationOverflows() {
-
-        // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(10000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountA);
-
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(Long.MAX_VALUE - 10)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountB);
-
-        TransferCommand command = new TransferCommand(1, 2, 3000);
-
-        // WHEN
-        assertThrowsExactly(TransferNotCompletedException.class, () -> transferService.transfer(command));
-        Account resultA = accounts.getById(1).orElseThrow();
-        Account resultB = accounts.getById(2).orElseThrow();
-
-        // THEN
-        assertEquals(10000, resultA.getBalance());
-        assertEquals(Long.MAX_VALUE - 10, resultB.getBalance());
-
-    }
-
-    @Test
-    public void shouldRejectTransferBetweenDifferentCurrencies() {
-
-        // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(10000)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.create(accountA);
-
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(5000)
-                .currency(Currency.EUR)
-                .build();
-
-        accounts.create(accountB);
-
-        TransferCommand command = new TransferCommand(1, 2, 3000);
-
-        // WHEN
-        assertThrowsExactly(UnsupportedCurrencyException.class, () -> transferService.transfer(command));
-        Account resultA = accounts.getById(1).orElseThrow();
-        Account resultB = accounts.getById(2).orElseThrow();
-
-        // THEN
-        assertEquals(10000, resultA.getBalance());
-        assertEquals(5000, resultB.getBalance());
-
-    }
-
-    @Test
-    public void shouldRejectTransfersInUnsupportedCurrency() {
-
-        // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(10000)
-                .currency(Currency.EUR)
-                .build();
-
-        accounts.create(accountA);
-
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(5000)
-                .currency(Currency.EUR)
-                .build();
-
-        accounts.create(accountB);
-
-        TransferCommand command = new TransferCommand(1, 2, 3000);
-
-        // WHEN
-        assertThrowsExactly(UnsupportedCurrencyException.class, () -> transferService.transfer(command));
-        Account resultA = accounts.getById(1).orElseThrow();
-        Account resultB = accounts.getById(2).orElseThrow();
-
-        // THEN
-        assertEquals(10000, resultA.getBalance());
-        assertEquals(5000, resultB.getBalance());
-
-    }
-
-}
+package me.jkiakumbo.payment_ledger.service;import me.jkiakumbo.payment_ledger.config.PostgresTestConfig;import me.jkiakumbo.payment_ledger.exceptions.*;import me.jkiakumbo.payment_ledger.command.TransferCommand;import me.jkiakumbo.payment_ledger.domain.Account;import me.jkiakumbo.payment_ledger.domain.Currency;import me.jkiakumbo.payment_ledger.repository.Accounts;import org.junit.jupiter.api.Test;import org.springframework.beans.factory.annotation.Autowired;import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;import org.springframework.boot.test.context.SpringBootTest;import org.springframework.context.annotation.Import;import org.springframework.test.context.ActiveProfiles;import java.util.ArrayList;import java.util.List;import java.util.concurrent.*;import java.util.concurrent.atomic.AtomicInteger;import static org.junit.jupiter.api.Assertions.*;@SpringBootTest@ActiveProfiles("test")@Import(PostgresTestConfig.class)@AutoConfigureTestDatabase (replace = AutoConfigureTestDatabase.Replace.NONE)class TransferServiceImplTest {    @Autowired    private Accounts accounts;    @Autowired    private  TransferService transferService;    @Test    public void shouldTransferMoney() {        // GIVEN        Account accountA = accounts.save(new Account(10000, Currency.GBP));        Account accountB = accounts.save(new Account(5000, Currency.GBP));        TransferCommand command = new TransferCommand(accountA.getId(), accountB.getId(), 3000);        // WHEN        transferService.transfer(command);        Account resultA = accounts.findById(accountA.getId()).orElseThrow();        Account resultB = accounts.findById(accountB.getId()).orElseThrow();        // THEN        assertEquals(7000, resultA.getBalance());        assertEquals(8000, resultB.getBalance());    }    @Test    public void shouldRejectTransferWhenInsufficientFunds() {        // GIVEN        Account accountA = accounts.save(new Account(10000, Currency.GBP));        Account accountB = accounts.save(new Account(5000, Currency.GBP));        TransferCommand command = new TransferCommand(accountA.getId(), accountB.getId(), 15000);        // WHEN        assertThrowsExactly(InsufficientAmountException.class, () -> transferService.transfer(command));        Account resultA = accounts.findById(accountA.getId()).orElseThrow();        Account resultB = accounts.findById(accountB.getId()).orElseThrow();        // THEN        assertEquals(10000, resultA.getBalance());        assertEquals(5000, resultB.getBalance());    }    @Test    public void shouldNotAcceptZeroAmount() {        // WHEN        long amount = 0;        TransferCommand command = new TransferCommand(1, 2, amount);        // THEN        assertThrowsExactly(InvalidAmountException.class, () -> transferService.transfer(command));    }    @Test    public void shouldNotAcceptNegativeAmount() {        // WHEN        long amount = -50;        TransferCommand command = new TransferCommand(1, 2, amount);        // THEN        assertThrowsExactly(InvalidAmountException.class, () -> transferService.transfer(command));    }    @Test    public void shouldRejectTransferForNoExistingSource() {        // GIVEN        Account accountB = accounts.save(new Account(5000, Currency.GBP));        TransferCommand command = new TransferCommand(0, accountB.getId(), 15000);        // WHEN        assertThrowsExactly(AccountNotFoundException.class, () -> transferService.transfer(command));        Account resultB = accounts.findById(accountB.getId()).orElseThrow();        // THEN        assertEquals(5000, resultB.getBalance());    }    @Test    public void shouldRejectTransferForNoExistingDestination() {        // GIVEN        Account accountA = accounts.save(new Account(5000, Currency.GBP));        TransferCommand command = new TransferCommand(accountA.getId(), 200, 15000);        // WHEN        assertThrowsExactly(AccountNotFoundException.class, () -> transferService.transfer(command));        Account resultA = accounts.findById(accountA.getId()).orElseThrow();        // THEN        assertEquals(5000, resultA.getBalance());    }    @Test    public void shouldRejectTransferToSameAccount() {        // WHEN        long amount = 50;        TransferCommand command = new TransferCommand(1, 1, amount);        // THEN        assertThrowsExactly(TransferToSameAccountException.class, () -> transferService.transfer(command));    }    @Test    public void shouldPreserveBalancesWhenDestinationOverflows() {        // GIVEN        Account accountA = accounts.save(new Account(10000, Currency.GBP));        Account accountB = accounts.save(new Account(Long.MAX_VALUE - 10, Currency.GBP));        TransferCommand command = new TransferCommand(accountA.getId(), accountB.getId(), 3000);        // WHEN        assertThrowsExactly(TransferNotCompletedException.class, () -> transferService.transfer(command));        Account resultA = accounts.findById(accountA.getId()).orElseThrow();        Account resultB = accounts.findById(accountB.getId()).orElseThrow();        // THEN        assertEquals(10000, resultA.getBalance());        assertEquals(Long.MAX_VALUE - 10, resultB.getBalance());    }    @Test    public void shouldRejectTransferBetweenDifferentCurrencies() {        // GIVEN        Account accountA = accounts.save(new Account(10000, Currency.GBP));        Account accountB = accounts.save(new Account(5000, Currency.EUR));        TransferCommand command = new TransferCommand(accountA.getId(), accountB.getId(), 3000);        // WHEN        assertThrowsExactly(UnsupportedCurrencyException.class, () -> transferService.transfer(command));        Account resultA = accounts.findById(accountA.getId()).orElseThrow();        Account resultB = accounts.findById(accountB.getId()).orElseThrow();        // THEN        assertEquals(10000, resultA.getBalance());        assertEquals(5000, resultB.getBalance());    }    @Test    public void shouldRejectTransfersInUnsupportedCurrency() {        // GIVEN        Account accountA = accounts.save(new Account(10000, Currency.EUR));        Account accountB = accounts.save(new Account(5000, Currency.EUR));        TransferCommand command = new TransferCommand(accountA.getId(), accountB.getId(), 3000);        // WHEN        assertThrowsExactly(UnsupportedCurrencyException.class, () -> transferService.transfer(command));        Account resultA = accounts.findById(accountA.getId()).orElseThrow();        Account resultB = accounts.findById(accountB.getId()).orElseThrow();        // THEN        assertEquals(10000, resultA.getBalance());        assertEquals(5000, resultB.getBalance());    }    @Test    public void shouldPreventOverspendingUnderConcurrentTransfers() throws InterruptedException {        for (int i = 1; i <= 100; i++) {            // GIVEN            Account accountA = accounts.save(new Account(10000, Currency.GBP));            Account accountB = accounts.save(new Account(0, Currency.GBP));            Account accountC = accounts.save(new Account(0, Currency.GBP));            TransferCommand command1 = new TransferCommand(accountA.getId(), accountB.getId(), 8000);            TransferCommand command2 = new TransferCommand(accountA.getId(), accountC.getId(), 8000);            List<Future<?>> futures = new ArrayList<>();            AtomicInteger success = new AtomicInteger();            AtomicInteger insufficientFundsFailures = new AtomicInteger();            ExecutorService executor = Executors.newFixedThreadPool(2);            CountDownLatch ready = new CountDownLatch(2);            CountDownLatch start = new CountDownLatch(1);            // WHEN            try {                Future<?> futureA = executor.submit(() -> {                    try {                        ready.countDown();                        start.await();                        transferService.transfer(command1);                    } catch (InterruptedException e) {                        Thread.currentThread().interrupt();                        throw new RuntimeException(e);                    }                });                futures.add(futureA);                Future<?> futureB = executor.submit(() -> {                    try {                        ready.countDown();                        start.await();                        transferService.transfer(command2);                    } catch (InterruptedException e) {                        Thread.currentThread().interrupt();                        throw new RuntimeException(e);                    }                });                futures.add(futureB);                assertTrue(ready.await(5, TimeUnit.SECONDS));                start.countDown();                futures.forEach(future -> {                    try {                        future.get(5, TimeUnit.SECONDS);                        success.getAndIncrement();                    } catch (ExecutionException e) {                        Throwable throwable = e.getCause();                        if( throwable instanceof InsufficientAmountException) {                            insufficientFundsFailures.incrementAndGet();                        } else {                            throw new AssertionError("Unexpected transfer failure", throwable);                        }                    } catch (InterruptedException | TimeoutException e) {                        throw new AssertionError("Unexpected transfer failure", e);                    }                });            } finally {                start.countDown();                futures.stream()                        .filter(f -> !f.isDone())                        .forEach(f -> f.cancel(true));                executor.shutdownNow();                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor did not terminate");            }            Account resultA = accounts.findById(accountA.getId()).orElseThrow();            Account resultB = accounts.findById(accountB.getId()).orElseThrow();            Account resultC = accounts.findById(accountC.getId()).orElseThrow();            long actualTotal = resultA.getBalance() + resultB.getBalance() + resultC.getBalance();            long actualSumBAndC = resultB.getBalance() + resultC.getBalance();            // THEN            assertEquals(2000, resultA.getBalance());            assertEquals(10000, actualTotal);            assertEquals(8000, actualSumBAndC);            assertTrue(hasExactlyOneRecipient(resultB.getBalance(), resultC.getBalance()));            assertEquals(1, success.get());            assertEquals(1, insufficientFundsFailures.get());        }    }    @Test    public void shouldCompleteBothTransfer() throws InterruptedException {        for (int i = 1; i <= 100; i++) {            // GIVEN            Account accountA = accounts.save(new Account(10000, Currency.GBP));            Account accountB = accounts.save(new Account(10000, Currency.GBP));            TransferCommand command1 = new TransferCommand(accountA.getId(), accountB.getId(), 8000);            TransferCommand command2 = new TransferCommand(accountB.getId(), accountA.getId(), 8000);            List<Future<?>> futures = new ArrayList<>();            AtomicInteger success = new AtomicInteger();            AtomicInteger insufficientFundsFailures = new AtomicInteger();            ExecutorService executor = Executors.newFixedThreadPool(2);            CountDownLatch ready = new CountDownLatch(2);            CountDownLatch start = new CountDownLatch(1);            // WHEN            try {                Future<?> futureA = executor.submit(() -> {                    try {                        ready.countDown();                        start.await();                        transferService.transfer(command1);                    } catch (InterruptedException e) {                        Thread.currentThread().interrupt();                        throw new RuntimeException(e);                    }                });                futures.add(futureA);                Future<?> futureB = executor.submit(() -> {                    try {                        ready.countDown();                        start.await();                        transferService.transfer(command2);                    } catch (InterruptedException e) {                        Thread.currentThread().interrupt();                        throw new RuntimeException(e);                    }                });                futures.add(futureB);                assertTrue(ready.await(5, TimeUnit.SECONDS));                start.countDown();                futures.forEach(future -> {                    try {                        future.get(5, TimeUnit.SECONDS);                        success.getAndIncrement();                    } catch (ExecutionException e) {                        Throwable throwable = e.getCause();                        if( throwable instanceof InsufficientAmountException) {                            insufficientFundsFailures.incrementAndGet();                        } else {                            throw new AssertionError("Unexpected transfer failure", throwable);                        }                    } catch (InterruptedException | TimeoutException e) {                        throw new AssertionError("Unexpected transfer failure", e);                    }                });            } finally {                start.countDown();                futures.stream()                        .filter(f -> !f.isDone())                        .forEach(f -> f.cancel(true));                executor.shutdownNow();                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor did not terminate");            }            Account resultA = accounts.findById(accountA.getId()).orElseThrow();            Account resultB = accounts.findById(accountB.getId()).orElseThrow();            long actualTotal = resultA.getBalance() + resultB.getBalance();            // THEN            assertEquals(10000, resultA.getBalance());            assertEquals(10000, resultB.getBalance());            assertEquals(20000, actualTotal);            assertEquals(2, success.get());            assertEquals(0, insufficientFundsFailures.get());        }    }    private boolean hasExactlyOneRecipient(long balanceB, long balanceC) {        return (balanceB == 8000 && balanceC == 0) || (balanceB == 0 && balanceC == 8000);    }}
