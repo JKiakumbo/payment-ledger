@@ -31,6 +31,11 @@ dependencies {
 	testAnnotationProcessor("org.projectlombok:lombok")
 }
 
-tasks.withType<Test> {
+tasks.test {
 	useJUnitPlatform()
+
+	testLogging {
+		events("passed", "skipped", "failed")
+		showStandardStreams = true
+	}
 }
