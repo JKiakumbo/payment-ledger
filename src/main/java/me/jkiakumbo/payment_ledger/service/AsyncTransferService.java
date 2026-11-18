@@ -1,6 +1,7 @@
 package me.jkiakumbo.payment_ledger.service;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
@@ -15,7 +16,7 @@ public class AsyncTransferService {
         this.transferService = transferService;
     }
 
-    public CompletableFuture<Void> transferAsync(long fromAccountId, long toAccountId, BigDecimal amount) {
+    public CompletableFuture<Void> transferAsync(UUID fromAccountId, UUID toAccountId, BigDecimal amount) {
         Supplier<Void> transfer = () -> {
             transferService.transfer(fromAccountId, toAccountId, amount);
             return null;
