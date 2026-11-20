@@ -5,22 +5,26 @@ import me.jkiakumbo.payment_ledger.exception.InvalidAmountException;
 import me.jkiakumbo.payment_ledger.exception.InvalidCurrencyException;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Objects;
+import java.util.UUID;
 
-@Getter
-@Builder
-public class Account {
-    private final long id;
-    private final BigDecimal balance;
-    private final Currency currency;
+public record Account(UUID id, BigDecimal balance, Currency currency, LocalDateTime createdAt) {
 
-    public Account( long id, BigDecimal balance, Currency currency) {
+    public Account {
         validate(balance, currency);
-
-        this.id = id;
-        this.balance = balance;
-        this.currency = currency;
     }
+
+    public Account (UUID id, BigDecimal balance, Currency currency) {
+        this(id, balance, currency, LocalDateTime.now());
+    }
+
+    public Account (BigDecimal balance, Currency currency) {
+        this(UUID.randomUUID(), balance, currency);
+    }
+
 
     private static void validate(BigDecimal balance, Currency currency) {
         if (Objects.isNull(balance) || balance.compareTo(BigDecimal.ZERO) < 0) {
@@ -37,6 +41,6 @@ public class Account {
     }
 
     public Account copyWithBalance(BigDecimal balance) {
-        return new Account(this.getId(), balance, this.currency);
+        return new Account(this.id, balance, this.currency, createdAt);
     }
 }

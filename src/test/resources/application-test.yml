@@ -1,18 +1,18 @@
 spring:
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/app_test_db}
-    username: ${SPRING_DATASOURCE_USERNAME:test_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:test_password}
-    driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: always
 
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
+#  datasource:
+#    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/payments_test_db}
+#    username: ${TEST_DB_USERNAME:test_user}
+#    password: ${TEST_DB_PASSWORD:test_password}
+#    driver-class-name: org.postgresql.Driver
+#
+#logging:
+#  level:
+#    org.hibernate.SQL: WARN
 
 logging:
   level:
-    org.hibernate.SQL: WARN
+    org.flywaydb: DEBUG

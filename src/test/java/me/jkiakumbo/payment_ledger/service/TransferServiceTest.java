@@ -10,10 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,26 +18,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TransferServiceTest {
 
-    private ConcurrentMap<Long, Account> accounts;
+    private ConcurrentMap<UUID, Account> accounts;
     private TransferService transferService;
+    
+    private final UUID accountOneId = UUID.randomUUID();
+    private final UUID accountTwoId = UUID.randomUUID();
 
     @BeforeEach
     public void setup() {
         accounts = new ConcurrentHashMap<>();
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(BigDecimal.valueOf(100))
-                .currency(Currency.GBP)
-                .build();
+        Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100), Currency.GBP);
+        Account accountTwo = new Account(accountTwoId, BigDecimal.valueOf(50),Currency.GBP);
 
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(BigDecimal.valueOf(50))
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.put(1L, accountA);
-        accounts.put(2L, accountB);
+        accounts.put(accountOneId, accountOne);
+        accounts.put(accountTwoId, accountTwo);
 
         transferService = new TransferService(accounts);
     }
@@ -50,8 +41,8 @@ class TransferServiceTest {
     public void shouldTransferMoneyBetweenAccounts() {
 
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(30);
 
 
@@ -62,17 +53,17 @@ class TransferServiceTest {
         Account actualB = accounts.get(toAccountId);
 
         // THEN
-        assertEquals(BigDecimal.valueOf(70), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(80), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(70), actualA.balance());
+        assertEquals(BigDecimal.valueOf(80), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
     @Test
     public void shouldRejectTransferWhenInsufficientBalance() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(120);
 
         // WHEN
@@ -82,17 +73,17 @@ class TransferServiceTest {
         Account actualB = accounts.get(toAccountId);
 
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(50), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(100), actualA.balance());
+        assertEquals(BigDecimal.valueOf(50), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
     @Test
     public void shouldRejectNegativeTransferAmount() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(-50);
 
         // WHEN
@@ -100,17 +91,17 @@ class TransferServiceTest {
         Account actualA = accounts.get(fromAccountId);
         Account actualB = accounts.get(toAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(50), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(100), actualA.balance());
+        assertEquals(BigDecimal.valueOf(50), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
     @Test
     public void shouldRejectZeroTransferAmount() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.ZERO;
 
         // WHEN
@@ -118,17 +109,17 @@ class TransferServiceTest {
         Account actualA = accounts.get(fromAccountId);
         Account actualB = accounts.get(toAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(50), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(100), actualA.balance());
+        assertEquals(BigDecimal.valueOf(50), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
     @Test
     public void shouldNotRoundTransferAmount() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = new BigDecimal("1.001");
 
         // WHEN
@@ -136,54 +127,54 @@ class TransferServiceTest {
         Account actualA = accounts.get(fromAccountId);
         Account actualB = accounts.get(toAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(50), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(100), actualA.balance());
+        assertEquals(BigDecimal.valueOf(50), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
     @Test
     public void shouldRejectTransferToAnUnknownDestinationAccount() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 3;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = UUID.randomUUID();
         BigDecimal amount = BigDecimal.valueOf(30);
 
         // WHEN
         assertThrowsExactly(AccountNotFoundException.class, () ->transferService.transfer(fromAccountId, toAccountId, amount));
         Account actual = accounts.get(fromAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actual.getBalance());
+        assertEquals(BigDecimal.valueOf(100), actual.balance());
 
     }
 
     @Test
     public void shouldRejectTransferToAnUnknownSourceAccount() {
         // GIVEN
-        long fromAccountId = 3;
-        long toAccountId = 2;
+        UUID fromAccountId = UUID.randomUUID();
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(30);
 
         // WHEN
         assertThrowsExactly(AccountNotFoundException.class, () ->transferService.transfer(fromAccountId, toAccountId, amount));
         Account actual = accounts.get(toAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(50), actual.getBalance());
+        assertEquals(BigDecimal.valueOf(50), actual.balance());
 
     }
 
     @Test
     public void shouldRejectTransferToSameAccount() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 1;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountOneId;
         BigDecimal amount = BigDecimal.valueOf(30);
 
         // WHEN
         assertThrowsExactly(SameAccountTransferException.class, () ->transferService.transfer(fromAccountId, toAccountId, amount));
         Account actual = accounts.get(fromAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actual.getBalance());
+        assertEquals(BigDecimal.valueOf(100), actual.balance());
 
     }
 
@@ -191,8 +182,8 @@ class TransferServiceTest {
     void shouldTransferEntireAvailableBalance() {
 
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(100);
 
         // WHEN
@@ -201,17 +192,17 @@ class TransferServiceTest {
         Account actualB = accounts.get(toAccountId);
 
         // THEN
-        assertEquals(BigDecimal.ZERO, actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.ZERO, actualA.balance());
+        assertEquals(BigDecimal.valueOf(150), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
     @Test
     public void shouldRejectNullTransferAmount() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = null;
 
         // WHEN
@@ -219,37 +210,24 @@ class TransferServiceTest {
         Account actualA = accounts.get(fromAccountId);
         Account actualB = accounts.get(toAccountId);
         // THEN
-        assertEquals(BigDecimal.valueOf(100), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(50), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(100), actualA.balance());
+        assertEquals(BigDecimal.valueOf(50), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
     }
 
     @Test
     public void concurrentWithdrawalsShouldExposeRaceCondition() {
+        UUID accountThreeId = UUID.randomUUID();
         for (int i = 0; i < 100; i++) {
 
             // GIVEN
-            Account accountA = Account.builder()
-                    .id(1)
-                    .balance(BigDecimal.valueOf(100))
-                    .currency(Currency.GBP)
-                    .build();
+            Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100),Currency.GBP);
+            Account accountTwo = new Account(accountTwoId, BigDecimal.ZERO, Currency.GBP);
+            Account accountThree = new Account(accountThreeId, BigDecimal.ZERO, Currency.GBP);
 
-            Account accountB = Account.builder()
-                    .id(2)
-                    .balance(BigDecimal.ZERO)
-                    .currency(Currency.GBP)
-                    .build();
-
-            Account accountC = Account.builder()
-                    .id(3)
-                    .balance(BigDecimal.ZERO)
-                    .currency(Currency.GBP)
-                    .build();
-
-            accounts.put(1L, accountA);
-            accounts.put(2L, accountB);
-            accounts.put(3L, accountC);
+            accounts.put(accountOneId, accountOne);
+            accounts.put(accountTwoId, accountTwo);
+            accounts.put(accountThreeId, accountThree);
 
             ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -260,13 +238,13 @@ class TransferServiceTest {
             try {
                 Callable<Void> firstTransfer = () -> {
                     startGate.await();
-                    transferService.transfer(1L, 2L, BigDecimal.valueOf(80));
+                    transferService.transfer(accountOneId, accountTwoId, BigDecimal.valueOf(80));
                     return null;
                 };
 
                 Callable<Void> secondTransfer = () -> {
                     startGate.await();
-                    transferService.transfer(1L, 3L, BigDecimal.valueOf(80));
+                    transferService.transfer(accountOneId, accountThreeId, BigDecimal.valueOf(80));
                     return null;
                 };
 
@@ -305,9 +283,9 @@ class TransferServiceTest {
 
             // THEN
 
-            BigDecimal balanceA = accounts.get(1L).getBalance();
-            BigDecimal balanceB = accounts.get(2L).getBalance();
-            BigDecimal balanceC = accounts.get(3L).getBalance();
+            BigDecimal balanceA = accounts.get(accountOneId).balance();
+            BigDecimal balanceB = accounts.get(accountTwoId).balance();
+            BigDecimal balanceC = accounts.get(accountThreeId).balance();
             BigDecimal totalBalance = balanceA.add(balanceB).add(balanceC);
             BigDecimal expectedTotal = BigDecimal.valueOf(100);
 
@@ -344,20 +322,11 @@ class TransferServiceTest {
         for (int i = 0; i < 100; i++) {
 
             // GIVEN
-            Account accountA = Account.builder()
-                    .id(1)
-                    .balance(BigDecimal.valueOf(100))
-                    .currency(Currency.GBP)
-                    .build();
+            Account accountOne = new Account(accountOneId,BigDecimal.valueOf(100),Currency.GBP);
+            Account accountTwo = new Account(accountTwoId, BigDecimal.valueOf(50),Currency.GBP);
 
-            Account accountB = Account.builder()
-                    .id(2)
-                    .balance(BigDecimal.valueOf(50))
-                    .currency(Currency.GBP)
-                    .build();
-
-            accounts.put(1L, accountA);
-            accounts.put(2L, accountB);
+            accounts.put(accountOneId, accountOne);
+            accounts.put(accountTwoId, accountTwo);
 
             ExecutorService executor = Executors.newFixedThreadPool(2);
 
@@ -368,13 +337,13 @@ class TransferServiceTest {
             try {
                 Callable<Void> firstTransfer = () -> {
                     startGate.await();
-                    transferService.transfer(1L, 2L, BigDecimal.valueOf(30));
+                    transferService.transfer(accountOneId, accountTwoId, BigDecimal.valueOf(30));
                     return null;
                 };
 
                 Callable<Void> secondTransfer = () -> {
                     startGate.await();
-                    transferService.transfer(2L, 1L, BigDecimal.valueOf(20));
+                    transferService.transfer(accountTwoId, accountOneId, BigDecimal.valueOf(20));
                     return null;
                 };
 
@@ -405,8 +374,8 @@ class TransferServiceTest {
 
             // THEN
 
-            BigDecimal balanceA = accounts.get(1L).getBalance();
-            BigDecimal balanceB = accounts.get(2L).getBalance();
+            BigDecimal balanceA = accounts.get(accountOneId).balance();
+            BigDecimal balanceB = accounts.get(accountTwoId).balance();
             BigDecimal totalBalance = balanceA.add(balanceB);
             BigDecimal expectedTotal = BigDecimal.valueOf(150);
 
@@ -444,26 +413,18 @@ class TransferServiceTest {
         List<Future<Void>> futures = new ArrayList<>();
 
         // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(BigDecimal.valueOf(100))
-                .currency(Currency.GBP)
-                .build();
+        Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100), Currency.GBP);
 
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(BigDecimal.ZERO)
-                .currency(Currency.GBP)
-                .build();
+        Account accountTwo = new Account(accountTwoId, BigDecimal.ZERO, Currency.GBP);
 
-        accounts.put(1L, accountA);
-        accounts.put(2L, accountB);
+        accounts.put(accountOneId, accountOne);
+        accounts.put(accountTwoId, accountTwo);
 
         try {
             for (int i = 0; i < requestCount; i++) {
 
                 Future<Void> future = executor.submit(() -> {
-                    transferService.transfer(1L, 2L, BigDecimal.ONE);
+                    transferService.transfer(accountOneId, accountTwoId, BigDecimal.ONE);
                     return null;
                 });
 
@@ -485,8 +446,8 @@ class TransferServiceTest {
             executor.shutdownNow();
         }
 
-        BigDecimal balanceA = accounts.get(1L).getBalance();
-        BigDecimal balanceB = accounts.get(2L).getBalance();
+        BigDecimal balanceA = accounts.get(accountOneId).balance();
+        BigDecimal balanceB = accounts.get(accountTwoId).balance();
 
         assertEquals(BigDecimal.ZERO, balanceA);
         assertEquals(BigDecimal.valueOf(100), balanceB);

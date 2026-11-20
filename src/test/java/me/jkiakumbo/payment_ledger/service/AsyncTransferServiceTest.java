@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,28 +19,21 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AsyncTransferServiceTest {
-    private ConcurrentMap<Long, Account> accounts;
+    private ConcurrentMap<UUID, Account> accounts;
     private AsyncTransferService asyncTransferService;
     private ExecutorService executor;
+    private final UUID accountOneId = UUID.randomUUID();
+    private final UUID accountTwoId = UUID.randomUUID();
 
     @BeforeEach
     public void setup() {
         accounts = new ConcurrentHashMap<>();
         executor = Executors.newFixedThreadPool(5);
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(BigDecimal.valueOf(100))
-                .currency(Currency.GBP)
-                .build();
+        Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100), Currency.GBP);
+        Account accountTwo = new Account(accountTwoId, BigDecimal.valueOf(50), Currency.GBP);
 
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(BigDecimal.valueOf(50))
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.put(1L, accountA);
-        accounts.put(2L, accountB);
+        accounts.put(accountOneId, accountOne);
+        accounts.put(accountTwoId, accountTwo);
 
         asyncTransferService = new AsyncTransferService(new TransferService(accounts), executor);
     }
@@ -49,8 +43,8 @@ class AsyncTransferServiceTest {
     public void shouldTransferMoneyBetweenAccounts() {
 
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(30);
 
 
@@ -61,21 +55,21 @@ class AsyncTransferServiceTest {
             throw new RuntimeException(e);
         }
 
-        Account actualA = accounts.get(fromAccountId);
-        Account actualB = accounts.get(toAccountId);
+        Account actualAccountOne = accounts.get(fromAccountId);
+        Account actualAccountTwo = accounts.get(toAccountId);
 
         // THEN
-        assertEquals(BigDecimal.valueOf(70), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(80), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(70), actualAccountOne.balance());
+        assertEquals(BigDecimal.valueOf(80), actualAccountTwo.balance());
+        assertEquals(BigDecimal.valueOf(150), actualAccountOne.balance().add(actualAccountTwo.balance()));
 
     }
 
     @Test
     public void shouldRejectTransferWhenInsufficientBalance() {
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(120);
 
         // WHEN
@@ -90,9 +84,9 @@ class AsyncTransferServiceTest {
 
         // THEN
         assertInstanceOf(InsufficientBalanceException.class, exception.getCause());
-        assertEquals(BigDecimal.valueOf(100), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(50), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(100), actualA.balance());
+        assertEquals(BigDecimal.valueOf(50), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
     }
 
@@ -104,25 +98,16 @@ class AsyncTransferServiceTest {
         List<Future<Void>> futures = new ArrayList<>();
 
         // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(BigDecimal.valueOf(100))
-                .currency(Currency.GBP)
-                .build();
+        Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100), Currency.GBP);
+        Account accountTwo = new Account(accountTwoId, BigDecimal.ZERO, Currency.GBP);
 
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(BigDecimal.ZERO)
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.put(1L, accountA);
-        accounts.put(2L, accountB);
+        accounts.put(accountOneId, accountOne);
+        accounts.put(accountTwoId, accountTwo);
 
         try {
             for (int i = 0; i < requestCount; i++) {
 
-                CompletableFuture<Void> future = asyncTransferService.transferAsync(1L, 2L, BigDecimal.ONE);
+                CompletableFuture<Void> future = asyncTransferService.transferAsync(accountOneId, accountTwoId, BigDecimal.ONE);
 
                 futures.add(future);
             }
@@ -142,8 +127,8 @@ class AsyncTransferServiceTest {
             executor.shutdownNow();
         }
 
-        BigDecimal balanceA = accounts.get(1L).getBalance();
-        BigDecimal balanceB = accounts.get(2L).getBalance();
+        BigDecimal balanceA = accounts.get(accountOneId).balance();
+        BigDecimal balanceB = accounts.get(accountTwoId).balance();
 
         assertEquals(BigDecimal.ZERO, balanceA);
         assertEquals(BigDecimal.valueOf(100), balanceB);
@@ -151,38 +136,25 @@ class AsyncTransferServiceTest {
 
     @Test
     public void concurrentWithdrawalsShouldSucceed() {
+        UUID accountThreeId = UUID.randomUUID();
         for (int i = 0; i < 100; i++) {
 
             // GIVEN
-            Account accountA = Account.builder()
-                    .id(1)
-                    .balance(BigDecimal.valueOf(100))
-                    .currency(Currency.GBP)
-                    .build();
+            Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100), Currency.GBP);
+            Account accountTwo = new Account(accountTwoId, BigDecimal.ZERO, Currency.GBP);
+            Account accountThree = new Account(accountThreeId, BigDecimal.ZERO, Currency.GBP);
 
-            Account accountB = Account.builder()
-                    .id(2)
-                    .balance(BigDecimal.ZERO)
-                    .currency(Currency.GBP)
-                    .build();
-
-            Account accountC = Account.builder()
-                    .id(3)
-                    .balance(BigDecimal.ZERO)
-                    .currency(Currency.GBP)
-                    .build();
-
-            accounts.put(1L, accountA);
-            accounts.put(2L, accountB);
-            accounts.put(3L, accountC);
+            accounts.put(accountOneId, accountOne);
+            accounts.put(accountTwoId, accountTwo);
+            accounts.put(accountThreeId, accountThree);
 
             AtomicInteger expectedExceptions = new AtomicInteger();
             AtomicInteger unexpectedExceptions = new AtomicInteger();
             List<Future<Void>> futures = new ArrayList<>(2);
             try {
                 //WHEN
-                Future<Void> first = asyncTransferService.transferAsync(1L, 2L, BigDecimal.valueOf(80));
-                Future<Void> second = asyncTransferService.transferAsync(1L, 3L, BigDecimal.valueOf(80));
+                Future<Void> first = asyncTransferService.transferAsync(accountOneId, accountTwoId, BigDecimal.valueOf(80));
+                Future<Void> second = asyncTransferService.transferAsync(accountOneId, accountThreeId, BigDecimal.valueOf(80));
 
                 futures.addAll(List.of(first, second));
 
@@ -209,10 +181,9 @@ class AsyncTransferServiceTest {
             }
 
             // THEN
-
-            BigDecimal balanceA = accounts.get(1L).getBalance();
-            BigDecimal balanceB = accounts.get(2L).getBalance();
-            BigDecimal balanceC = accounts.get(3L).getBalance();
+            BigDecimal balanceA = accounts.get(accountOneId).balance();
+            BigDecimal balanceB = accounts.get(accountTwoId).balance();
+            BigDecimal balanceC = accounts.get(accountThreeId).balance();
             BigDecimal totalBalance = balanceA.add(balanceB).add(balanceC);
             boolean validRecipients = (balanceB.compareTo(BigDecimal.valueOf(80)) == 0 && balanceC.signum() == 0)
                     || (balanceC.compareTo(BigDecimal.valueOf(80)) == 0 && balanceB.signum() == 0);
@@ -231,28 +202,19 @@ class AsyncTransferServiceTest {
     void concurrentTransfersMustNotOverspend() {
 
         // GIVEN
-        Account accountA = Account.builder()
-                .id(1)
-                .balance(BigDecimal.valueOf(100))
-                .currency(Currency.GBP)
-                .build();
+        Account accountOne = new Account(accountOneId, BigDecimal.valueOf(100), Currency.GBP);
+        Account accountTwo = new Account(accountTwoId, BigDecimal.valueOf(50), Currency.GBP);
 
-        Account accountB = Account.builder()
-                .id(2)
-                .balance(BigDecimal.valueOf(50))
-                .currency(Currency.GBP)
-                .build();
-
-        accounts.put(1L, accountA);
-        accounts.put(2L, accountB);
+        accounts.put(accountOneId, accountOne);
+        accounts.put(accountTwoId, accountTwo);
 
         AtomicInteger unexpectedExceptions = new AtomicInteger();
         List<Future<Void>> futures = new ArrayList<>(2);
 
         //WHEN
         try {
-            Future<Void> first = asyncTransferService.transferAsync(1L, 2L, BigDecimal.valueOf(30));
-            Future<Void> second = asyncTransferService.transferAsync(2L, 1L, BigDecimal.valueOf(20));
+            Future<Void> first = asyncTransferService.transferAsync(accountOneId, accountTwoId, BigDecimal.valueOf(30));
+            Future<Void> second = asyncTransferService.transferAsync(accountTwoId, accountOneId, BigDecimal.valueOf(20));
             futures.addAll(List.of(first, second));
 
             for (Future<Void> future : futures) {
@@ -272,8 +234,8 @@ class AsyncTransferServiceTest {
 
         // THEN
 
-        BigDecimal balanceA = accounts.get(1L).getBalance();
-        BigDecimal balanceB = accounts.get(2L).getBalance();
+        BigDecimal balanceA = accounts.get(accountOneId).balance();
+        BigDecimal balanceB = accounts.get(accountTwoId).balance();
         BigDecimal totalBalance = balanceA.add(balanceB);
 
         assertEquals(BigDecimal.valueOf(90), balanceA);
@@ -291,8 +253,8 @@ class AsyncTransferServiceTest {
         AsyncTransferService service = getService(executingThread, started, release);
 
         // GIVEN
-        long fromAccountId = 1;
-        long toAccountId = 2;
+        UUID fromAccountId = accountOneId;
+        UUID toAccountId = accountTwoId;
         BigDecimal amount = BigDecimal.valueOf(30);
 
         // WHEN
@@ -314,9 +276,9 @@ class AsyncTransferServiceTest {
 
         Account actualA = accounts.get(fromAccountId);
         Account actualB = accounts.get(toAccountId);
-        assertEquals(BigDecimal.valueOf(70), actualA.getBalance());
-        assertEquals(BigDecimal.valueOf(80), actualB.getBalance());
-        assertEquals(BigDecimal.valueOf(150), actualA.getBalance().add(actualB.getBalance()));
+        assertEquals(BigDecimal.valueOf(70), actualA.balance());
+        assertEquals(BigDecimal.valueOf(80), actualB.balance());
+        assertEquals(BigDecimal.valueOf(150), actualA.balance().add(actualB.balance()));
 
 
     }
@@ -324,10 +286,10 @@ class AsyncTransferServiceTest {
     public void shouldRejectSubmissionsAfterExecutorShutdown() {
         // WHEN
         executor.shutdownNow();
-        assertThrowsExactly(RejectedExecutionException.class, () ->  asyncTransferService.transferAsync(1L, 2L, BigDecimal.ONE));
+        assertThrowsExactly(RejectedExecutionException.class, () ->  asyncTransferService.transferAsync(accountOneId, accountTwoId, BigDecimal.ONE));
 
-        BigDecimal balanceA = accounts.get(1L).getBalance();
-        BigDecimal balanceB = accounts.get(2L).getBalance();
+        BigDecimal balanceA = accounts.get(accountOneId).balance();
+        BigDecimal balanceB = accounts.get(accountTwoId).balance();
         BigDecimal totalBalance = balanceA.add(balanceB);
 
         // THEN
@@ -341,7 +303,7 @@ class AsyncTransferServiceTest {
 
             @Override
             public synchronized void transfer(
-                    long fromId, long toId, BigDecimal amount) {
+                    UUID fromId, UUID toId, BigDecimal amount) {
                 executingThread.set(Thread.currentThread());
                 started.countDown();
 
