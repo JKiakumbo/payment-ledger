@@ -5,6 +5,7 @@ import me.jkiakumbo.payment_ledger.exception.InvalidCurrencyException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
@@ -35,7 +36,7 @@ class AccountTest {
                 UUID.randomUUID(),
                 null,
                 Currency.GBP,
-                ZonedDateTime.now())
+                LocalDateTime.now())
         );
     }
 
@@ -45,7 +46,7 @@ class AccountTest {
                 UUID.randomUUID(),
                 BigDecimal.valueOf(-100),
                 Currency.GBP,
-                ZonedDateTime.now())
+                LocalDateTime.now())
         );
     }
 

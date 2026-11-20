@@ -5,19 +5,20 @@ import me.jkiakumbo.payment_ledger.exception.InvalidAmountException;
 import me.jkiakumbo.payment_ledger.exception.InvalidCurrencyException;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
-public record Account(UUID id, BigDecimal balance, Currency currency, ZonedDateTime createdAt) {
+public record Account(UUID id, BigDecimal balance, Currency currency, LocalDateTime createdAt) {
 
     public Account {
         validate(balance, currency);
     }
 
     public Account (UUID id, BigDecimal balance, Currency currency) {
-        this(id, balance, currency, ZonedDateTime.now(ZoneId.of("UTC")));
+        this(id, balance, currency, LocalDateTime.now());
     }
 
     public Account (BigDecimal balance, Currency currency) {
